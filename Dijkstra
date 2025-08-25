@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dijkstra's Algorithm – Visualizer (Distances in km)</title>
+  <style>
+    :root{
+      --bg:#0f172a;          /* slate-900 */
+      --panel:#111827ee;     /* gray-900 */
+      --card:#111827;        
+      --ink:#e5e7eb;         /* gray-200 */
+      --muted:#9ca3af;       /* gray-400 */
+      --accent:#22d3ee;      /* cyan-400 */
+      --accent2:#a78bfa;     /* violet-400 */
+      --good:#34d399;        /* emerald */
+      --warn:#fb7185;        /* rose */
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(1200px 600px at 70% 20%,#1e293b 0%,#0b1224 70%,#091021 100%);color:var(--ink);font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1f2937;background:#0b1224cc;backdrop-filter: blur(6px)}
+    header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.3px}
+    .wrap{display:grid;grid-template-columns: 320px 1fr;min-height:calc(100dvh - 56px)}
+    aside{border-right:1px solid #1f2937;background:linear-gradient(180deg,#0f172a, #0b1224);padding:14px;}
+    main{position:relative}
+    .panel{background:var(--panel);border:1px solid #1f2937;border-radius:16px;padding:12px;margin-bottom:12px;box-shadow: 0 10px 30px rgba(0,0,0,.25)}
+    .controls{display:flex;flex-wrap:wrap;gap:8px}
+    button, select{background:#0b1329;border:1px solid #223051;color:var(--ink);padding:8px 10px;border-radius:12px;cursor:pointer}
+    button:hover{border-color:#415f9e}
+    button.primary{background:linear-gradient(135deg,#1f3a8a,#0ea5e9);border-color:#3b82f6}
+    button.ghost{background:#0b1329}
+    .legend{display:flex;gap:12px;align-items:center;flex-wrap:wrap;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot.start{background:var(--good)}
+    .dot.path{background:var(--accent)}
+    .dot.node{background:#eab308}
+    .mt{margin-top:8px}
+
+    /* table */
+    table{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden}
+    thead{background:#0b1329;color:#cbd5e1}
+    th, td{padding:8px 10px;border-bottom:1px solid #1f2937;text-align:left}
+    tbody tr:hover{background:#0b132944}
+
+    /* canvas area */
+    #stage{width:100%;height:100%;position:absolute;inset:0;}
+    svg{width:100%;height:100%}
+    .edge{stroke:#334155;stroke-width:2}
+    .edge.active{stroke:var(--accent);stroke-width:3}
+    .edge-label{font-size:12px;fill:#cbd5e1;user-select:none}
+    .node{cursor:pointer}
+    .node circle{fill:#0ea5e9;stroke:#e2e8f0;stroke-width:2;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5))}
+    .node text{font-weight:700;fill:#0b1224}
+    .node.start circle{fill:var(--good)}
+    .node.target circle{fill:#eab308}
+    .node.onpath circle{fill:var(--accent2)}
+
+    .toast{position:absolute;right:14px;bottom:14px;background:#0b1329;border:1px solid #1f2937;padding:10px 12px;border-radius:12px;color:#cbd5e1;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🔎 Dijkstra's Algorithm Visualizer — distances in <b>km</b></h1>
+    <div class="legend">
+      <span class="dot start"></span> Start
+      <span class="dot path"></span> Shortest Path
+      <span class="dot node"></span> Target (click)
+    </div>
+  </header>
+  <div class="wrap">
+    <aside>
+      <div class="panel">
+        <div class="controls">
+          <label for="startSel">Start:</label>
+          <select id="startSel"></select>
+          <button id="setStart" class="primary">Set Start</button>
+          <button id="resetBtn" class="ghost">Reset</button>
+          <button id="randomBtn" class="ghost" title="Randomize edge weights (km)">Randomize km</button>
+        </div>
+        <p class="mt" style="color:var(--muted)">Tip: click any node to highlight its shortest path from the chosen start. Drag nodes to rearrange.</p>
+      </div>
+      <div class="panel">
+        <h3 style="margin:0 0 8px 0;font-size:14px;color:#cbd5e1">Distances from Start (km)</h3>
+        <table>
+          <thead>
+            <tr><th>Node</th><th>Distance (km)</th></tr>
+          </thead>
+          <tbody id="distBody"></tbody>
+        </table>
+      </div>
+      <div class="panel" id="pathInfo" style="display:none"></div>
+    </aside>
+    <main>
+      <div id="stage">
+        <svg id="svg"></svg>
+      </div>
+      <div class="toast" id="toast" style="display:none"></div>
+    </main>
+  </div>
+
+  <script>
+  // ---------------- Graph Definition ----------------
+  // 12 nodes (A–L) with fixed positions for neat layout
+  const nodes = [
+    {id:'A', x:120, y:120}, {id:'B', x:300, y:80}, {id:'C', x:520, y:100}, {id:'D', x:740, y:140},
+    {id:'E', x:160, y:280}, {id:'F', x:360, y:240}, {id:'G', x:580, y:260}, {id:'H', x:780, y:300},
+    {id:'I', x:120, y:440}, {id:'J', x:340, y:440}, {id:'K', x:560, y:440}, {id:'L', x:760, y:460}
+  ];
+
+  // Undirected edges with weights in km
+  let edges = [
+    ['A','B', 8], ['B','C', 6], ['C','D', 9],
+    ['A','E',10], ['B','F', 7], ['C','G', 5], ['D','H', 8],
+    ['E','F', 4], ['F','G', 6], ['G','H', 7],
+    ['E','I', 9], ['F','J', 5], ['G','K', 6], ['H','L', 7],
+    ['I','J', 4], ['J','K', 5], ['K','L', 6],
+    // diagonals / cross links
+    ['B','E',11], ['C','F', 9], ['D','G',10], ['F','I',12], ['G','J',11], ['H','K',10]
+  ];
+
+  const svg = document.getElementById('svg');
+  const startSel = document.getElementById('startSel');
+  const setStartBtn = document.getElementById('setStart');
+  const resetBtn = document.getElementById('resetBtn');
+  const randomBtn = document.getElementById('randomBtn');
+  const distBody = document.getElementById('distBody');
+  const pathInfo = document.getElementById('pathInfo');
+  const toast = document.getElementById('toast');
+
+  let start = 'A';
+  let dist = {};   // shortest distances
+  let prev = {};   // predecessors
+
+  // Build adjacency list from edges
+  function buildAdj() {
+    const adj = new Map();
+    nodes.forEach(n=>adj.set(n.id, []));
+    edges.forEach(([u,v,w])=>{
+      adj.get(u).push({to:v, w});
+      adj.get(v).push({to:u, w});
+    });
+    return adj;
+  }
+
+  // --------------- Dijkstra (O(V^2) tiny graph) ---------------
+  function dijkstra(source){
+    const adj = buildAdj();
+    const Q = new Set(nodes.map(n=>n.id));
+    dist = {}; prev = {};
+    nodes.forEach(n=>{dist[n.id] = Infinity; prev[n.id] = null;});
+    dist[source] = 0;
+
+    while(Q.size){
+      // pick min-dist in Q
+      let u = null, best = Infinity;
+      Q.forEach(v=>{ if(dist[v] < best){best = dist[v]; u = v;} });
+      if(u === null) break; // disconnected
+      Q.delete(u);
+
+      for(const {to, w} of adj.get(u)){
+        if(!Q.has(to)) continue;
+        const alt = dist[u] + w;
+        if(alt < dist[to]){ dist[to] = alt; prev[to] = u; }
+      }
+    }
+  }
+
+  function reconstructPath(target){
+    const path = [];
+    let u = target;
+    while(u){ path.push(u); u = prev[u]; }
+    return path.reverse();
+  }
+
+  // ---------------------- UI Rendering ----------------------
+  const edgeEls = new Map();
+  const edgeLabelEls = new Map();
+  const nodeEls = new Map();
+
+  function draw(){
+    svg.innerHTML = '';
+    // draw edges first
+    for(const [u,v,w] of edges){
+      const a = nodes.find(n=>n.id===u); const b = nodes.find(n=>n.id===v);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      line.setAttribute('class','edge');
+      svg.appendChild(line);
+      edgeEls.set(key(u,v), line);
+
+      const midx = (a.x + b.x)/2, midy = (a.y + b.y)/2;
+      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('x', midx); lbl.setAttribute('y', midy - 6);
+      lbl.setAttribute('class','edge-label');
+      lbl.setAttribute('text-anchor','middle');
+      lbl.textContent = w + ' km';
+      svg.appendChild(lbl);
+      edgeLabelEls.set(key(u,v), lbl);
+    }
+
+    // draw nodes on top
+    for(const n of nodes){
+      const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+      g.setAttribute('class','node'); g.dataset.id = n.id;
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', n.x); c.setAttribute('cy', n.y); c.setAttribute('r', 18);
+      const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+      t.setAttribute('x', n.x); t.setAttribute('y', n.y+4); t.setAttribute('text-anchor','middle');
+      t.textContent = n.id;
+      g.appendChild(c); g.appendChild(t);
+      svg.appendChild(g);
+      nodeEls.set(n.id, g);
+
+      // interactions
+      g.addEventListener('click', ()=> selectTarget(n.id));
+      enableDrag(g, n);
+    }
+
+    refreshNodeStyles();
+  }
+
+  function key(u,v){ return u < v ? `${u}-${v}` : `${v}-${u}`; }
+
+  function refreshNodeStyles(){
+    nodeEls.forEach((g,id)=>{
+      g.classList.remove('start','target','onpath');
+      if(id===start) g.classList.add('start');
+    });
+  }
+
+  function updateEdgePositions(){
+    // when dragging nodes
+    for(const [u,v,w] of edges){
+      const a = nodes.find(n=>n.id===u); const b = nodes.find(n=>n.id===v);
+      const k = key(u,v);
+      const line = edgeEls.get(k); const lbl = edgeLabelEls.get(k);
+      if(line){
+        line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      }
+      if(lbl){
+        const midx = (a.x + b.x)/2, midy = (a.y + b.y)/2;
+        lbl.setAttribute('x', midx); lbl.setAttribute('y', midy - 6);
+      }
+    }
+  }
+
+  // ---------------------- Interaction ----------------------
+  function populateStartSelect(){
+    startSel.innerHTML = nodes.map(n=>`<option ${n.id===start?'selected':''}>${n.id}</option>`).join('');
+  }
+
+  function computeAndShow(){
+    dijkstra(start);
+    // update table
+    const rows = nodes.map(n=>({id:n.id, d: dist[n.id]})).sort((a,b)=>a.id.localeCompare(b.id));
+    distBody.innerHTML = rows.map(r=>`<tr><td>${r.id}</td><td>${Number.isFinite(r.d)?r.d.toFixed(1):'∞'}</td></tr>`).join('');
+    // clear any previous path highlight
+    svg.querySelectorAll('.edge').forEach(e=>e.classList.remove('active'));
+    nodeEls.forEach(g=>g.classList.remove('onpath','target'));
+    showToast(`Start set to ${start}. Distances computed.`);
+  }
+
+  function selectTarget(target){
+    if(!Number.isFinite(dist[target])){ showToast(`Node ${target} is unreachable from ${start}.`); return; }
+    nodeEls.forEach(g=>g.classList.remove('onpath','target'));
+    nodeEls.get(target).classList.add('target');
+    const path = reconstructPath(target);
+    for(let i=0;i<path.length;i++){
+      const u = path[i];
+      nodeEls.get(u).classList.add('onpath');
+      if(i<path.length-1){
+        const v = path[i+1];
+        const k = key(u,v);
+        const e = edgeEls.get(k); if(e) e.classList.add('active');
+      }
+    }
+    pathInfo.style.display = 'block';
+    pathInfo.innerHTML = `<div><strong>Shortest path ${start} → ${target}</strong><br>`+
+      `${path.join(' → ')}<br>`+
+      `<span style="color:var(--muted)">Total distance:</span> <b>${dist[target].toFixed(1)} km</b></div>`;
+  }
+
+  // Dragging nodes
+  function enableDrag(g, n){
+    let dragging=false, ox=0, oy=0;
+    g.addEventListener('pointerdown', (e)=>{dragging=true; ox=e.clientX - n.x; oy=e.clientY - n.y; g.setPointerCapture(e.pointerId)});
+    g.addEventListener('pointermove', (e)=>{
+      if(!dragging) return;
+      n.x = e.clientX - ox; n.y = e.clientY - oy;
+      g.querySelector('circle').setAttribute('cx', n.x);
+      g.querySelector('circle').setAttribute('cy', n.y);
+      const t = g.querySelector('text'); t.setAttribute('x', n.x); t.setAttribute('y', n.y+4);
+      updateEdgePositions();
+    });
+    g.addEventListener('pointerup', (e)=>{dragging=false; g.releasePointerCapture(e.pointerId)});
+  }
+
+  function randomizeWeights(){
+    edges = edges.map(([u,v,_w])=>[u,v, randInt(3, 18)]); // 3–18 km
+    // update labels
+    edges.forEach(([u,v,w])=>{
+      const lbl = edgeLabelEls.get(key(u,v)); if(lbl) lbl.textContent = w + ' km';
+    });
+    // recompute if start already chosen
+    computeAndShow();
+  }
+
+  function resetAll(){
+    start = 'A';
+    populateStartSelect();
+    refreshNodeStyles();
+    computeAndShow();
+    pathInfo.style.display='none';
+  }
+
+  function showToast(msg){
+    toast.textContent = msg; toast.style.display='block';
+    clearTimeout(showToast.t);
+    showToast.t = setTimeout(()=>toast.style.display='none', 2000);
+  }
+
+  function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+
+  // ---------------------- Init ----------------------
+  draw();
+  populateStartSelect();
+  computeAndShow();
+
+  setStartBtn.addEventListener('click', ()=>{
+    start = startSel.value; refreshNodeStyles(); computeAndShow();
+  });
+  resetBtn.addEventListener('click', resetAll);
+  randomBtn.addEventListener('click', randomizeWeights);
+
+  window.addEventListener('resize', ()=> updateEdgePositions());
+  </script>
+</body>
+</html>
