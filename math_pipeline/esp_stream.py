@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 import matplotlib.pyplot as plt
 from colorama import Fore, Style, init
+import os
 from engine import SpoilageEngine
 
 init(autoreset=True)
@@ -106,11 +107,14 @@ def main():
             ax.legend()
             plt.pause(0.1)
 
-            # save every 10 samples
-            if step % 10 == 0:
-                df = pd.DataFrame(all_results)
-                df.to_excel("esp_live_output.xlsx", index=False)
-                df.to_csv("esp_live_output.csv", index=False)
+            # append latest row to CSV for Flask
+            df = pd.DataFrame([out])
+            df.to_csv(
+                "esp_live_output.csv",
+                mode="a",
+                header=not os.path.exists("esp_live_output.csv"),
+                index=False
+            )
 
             time.sleep(3)
 
@@ -119,7 +123,6 @@ def main():
         if all_results:
             df = pd.DataFrame(all_results)
             df.to_excel("esp_live_output.xlsx", index=False)
-            df.to_csv("esp_live_output.csv", index=False)
         print("✅ Logs saved.")
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ PRODUCT_PROFILES = {
         "z_threshold": 2.5, "ewma_threshold": 2.2,
         "ewma_alpha": 0.3,
         "max_safe_temp": 5, "min_rate": 0.0, "max_rate": 7.0,
-        "weights": {"temp":0.5,"humidity":0.2,"door":0.15,"gas":0.1,"interaction":0.03,"outside":0.02},
+        "weights": {"temp":0.5,"humidity":0.2,"door":0.15,"gas":0.15,"interaction":0.03,"outside":0.02},
         "adaptive_q10": True, "adaptive_window": 35, "adaptive_ewma": True,
         "logistic": {"midpoint": 35.0, "slope": 7.0},   # faster spoilage onset
         "alerts": {
